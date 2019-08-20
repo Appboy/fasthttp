@@ -1,5 +1,11 @@
 language: go
 
+# Docker is required for fuzzit regression tests
+services:
+  - docker
+
+dist: bionic
+
 os:
   - linux
   - osx
@@ -37,12 +43,19 @@ jobs:
 
         # run tests with the race detector as well
         - go test -race -v ./...
-    - stage: fuzzit
-      #if: branch = master AND type IN (push)
+#    - stage: fuzzit.dev (fuzzing)
+#      branches: master
+#      os:
+#        - linux
+#      go:
+#        - 1.12.x
+#      script:
+#        - ./fuzzit.sh fuzzing
+    - stage: fuzzit.dev (regression)
       os:
         - linux
       go:
         - 1.12.x
       script:
-        - ./fuzzit.sh
+        - ./fuzzit.sh local-regression
 
