@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -825,11 +826,7 @@ func doRequestFollowRedirects(req *Request, dst []byte, url string, c clientDoer
 			break
 		}
 		statusCode = resp.Header.StatusCode()
-		if statusCode != StatusMovedPermanently &&
-			statusCode != StatusFound &&
-			statusCode != StatusSeeOther &&
-			statusCode != StatusTemporaryRedirect &&
-			statusCode != StatusPermanentRedirect {
+		if !StatusCodeIsRedirect(statusCode) {
 			break
 		}
 
@@ -861,6 +858,15 @@ func getRedirectURL(baseURL string, location []byte) string {
 	redirectURL := u.String()
 	ReleaseURI(u)
 	return redirectURL
+}
+
+// StatusCodeIsRedirect returns true if the status code indicates a redirect.
+func StatusCodeIsRedirect(statusCode int) bool {
+	return statusCode == StatusMovedPermanently ||
+		statusCode == StatusFound ||
+		statusCode == StatusSeeOther ||
+		statusCode == StatusTemporaryRedirect ||
+		statusCode == StatusPermanentRedirect
 }
 
 var (
@@ -1142,7 +1148,11 @@ func (c *HostClient) doNonNilReqResp(req *Request, resp *Response) (bool, error)
 
 	// Free up resources occupied by response before sending the request,
 	// so the GC may reclaim these resources (e.g. response body).
+
+	// backing up SkipBody in case it was set explicitly
+	customSkipBody := resp.SkipBody
 	resp.Reset()
+	resp.SkipBody = customSkipBody
 
 	// If we detected a redirect to another schema
 	if req.schemaUpdate {
@@ -1209,7 +1219,7 @@ func (c *HostClient) doNonNilReqResp(req *Request, resp *Response) (bool, error)
 		}
 	}
 
-	if !req.Header.IsGet() && req.Header.IsHead() {
+	if customSkipBody || !req.Header.IsGet() && req.Header.IsHead() {
 		resp.SkipBody = true
 	}
 	if c.DisableHeaderNamesNormalizing {
@@ -1653,7 +1663,7 @@ func addMissingPort(addr string, isTLS bool) string {
 	if isTLS {
 		port = 443
 	}
-	return fmt.Sprintf("%s:%d", addr, port)
+	return net.JoinHostPort(addr, strconv.Itoa(port))
 }
 
 // PipelineClient pipelines requests over a limited set of concurrent
